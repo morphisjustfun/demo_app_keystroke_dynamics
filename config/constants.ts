@@ -1,0 +1,1 @@
+export const CLIENT_ID = '1234-abcd';
