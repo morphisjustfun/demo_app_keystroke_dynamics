@@ -42,9 +42,13 @@ export default function IndexPage() {
         }
 
         // TODO mock
-        console.table(twoFactorPayload);
+        console.log('-------------PAYLOAD TO SEND TO 2FA BACKEND----------')
+        console.log(twoFactorPayload);
+        console.log('-----------------------------------------------------')
+        console.log('-------------HASH RECEIVED FROM 2FA BACKEND----------')
         const hash = 'ji@>sdj908u12ij1klma-asmcasijda=12asd@';
         console.log(hash);
+        console.log('-----------------------------------------------------')
         //
 
         const res = await fetch("/api/login", {
