@@ -17,7 +17,7 @@ export default async function login(req: NextApiRequest, res: NextApiResponse) {
         }
     });
     if (matches.length === 0) {
-        res.status(401).json({token: undefined, message: 'Invalid credentials 2FA', success: false});
+        res.status(401).json({token: undefined, message: 'Invalid credentials', success: false});
         return;
     } else {
         await client.tries.deleteMany({
@@ -33,7 +33,7 @@ export default async function login(req: NextApiRequest, res: NextApiResponse) {
             }
         });
         if (users.length === 0) {
-            res.status(401).json({token: undefined, message: 'Invalid credentials User/Password', success: false});
+            res.status(401).json({token: undefined, message: 'Invalid credentials', success: false});
             return;
         } else {
             await fetch(`${TWO_FACTOR_AUTHENTICATION_DOMAIN}/train`, {
