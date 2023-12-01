@@ -1,4 +1,6 @@
 import {NextApiRequest, NextApiResponse} from "next";
+import {PrismaClient} from "@prisma/client";
+import {CLIENT_ID, TWO_FACTOR_AUTHENTICATION_DOMAIN} from "@/config/constants";
 
 export default async function login(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
@@ -6,22 +8,48 @@ export default async function login(req: NextApiRequest, res: NextApiResponse) {
         return;
     }
 
-    const {username, password, hash} = JSON.parse(req.body);
+    const {username, password, hash, characterTime} = req.body;
 
-    // TODO validate hash
-    //
-
-    if (username === 'admin' && password === 'admin') {
-        res.status(200).json({token: '1234', message: 'Login success', success: true});
+    const client = new PrismaClient();
+    const matches = await client.tries.findMany({
+        where: {
+            hash: hash
+        }
+    });
+    if (matches.length === 0) {
+        res.status(401).json({token: undefined, message: 'Invalid credentials 2FA', success: false});
+        return;
     } else {
-        res.status(401).json({token: undefined, message: 'Invalid credentials', success: false});
-    }
+        await client.tries.deleteMany({
+            where: {
+                hash: hash
+            }
+        });
 
-    // const user = await getUser({ username, password });
-    // if (!user) {
-    //   res.status(401).json({ message: 'Invalid credentials' });
-    //   return;
-    // }
-    // const token = await createToken(user);
-    // res.status(200).json({ token });
+        const users = await client.users.findMany({
+            where: {
+                username: username,
+                password: password
+            }
+        });
+        if (users.length === 0) {
+            res.status(401).json({token: undefined, message: 'Invalid credentials User/Password', success: false});
+            return;
+        } else {
+            await fetch(`${TWO_FACTOR_AUTHENTICATION_DOMAIN}/train`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username,
+                    characterTime: characterTime,
+                    'client_id': CLIENT_ID
+                })
+            });
+
+            res.status(200).json({token: '1234', message: 'Login success', success: true});
+            return;
+        }
+    }
 }

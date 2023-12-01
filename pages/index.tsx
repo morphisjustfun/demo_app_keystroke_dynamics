@@ -1,7 +1,8 @@
 import {Button, Input, Divider} from "@nextui-org/react";
 import {useState, useRef} from "react";
-import {CLIENT_ID} from "@/config/constants";
+import {CLIENT_ID, TWO_FACTOR_AUTHENTICATION_DOMAIN} from "@/config/constants";
 import {DateTimeDuration} from "@internationalized/date";
+import {EyeFilledIcon, EyeSlashFilledIcon} from "@nextui-org/shared-icons";
 
 interface CharacterTime {
     character: string;
@@ -12,9 +13,10 @@ interface CharacterTime {
 export default function IndexPage() {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
-
+    const keys = useRef(new Map<string, number>());
+    const [isVisible, setIsVisible] = useState(false);
+    const toggleVisibility = () => setIsVisible(!isVisible);
     const characterTime = useRef<CharacterTime[]>([]);
-
     const actualCharacterBeginTime = useRef<Date>(new Date());
 
 
@@ -25,11 +27,23 @@ export default function IndexPage() {
 
     const login = async () => {
         if (username.length === 0) {
+            setUsername("");
+            setPassword("");
             alert("Please enter a username");
             return;
         }
 
+        // if username contains spaces then alert
+        if (username.includes(" ")) {
+            setUsername("");
+            setPassword("");
+            alert("Username cannot contain spaces");
+            return;
+        }
+
         if (password.length === 0) {
+            setUsername("");
+            setPassword("");
             alert("Please enter a password");
             return;
         }
@@ -46,17 +60,29 @@ export default function IndexPage() {
         console.log(twoFactorPayload);
         console.log('-----------------------------------------------------')
         console.log('-------------HASH RECEIVED FROM 2FA BACKEND----------')
-        const hash = 'ji@>sdj908u12ij1klma-asmcasijda=12asd@';
+        const response = await fetch(`${TWO_FACTOR_AUTHENTICATION_DOMAIN}/auth`,
+            {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(twoFactorPayload)
+            });
+        const responseJson = await response.json();
+        const hash = responseJson.payload;
         console.log(hash);
         console.log('-----------------------------------------------------')
-        //
 
         const res = await fetch("/api/login", {
             method: "POST",
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify({
                 username,
                 password,
-                hash
+                hash,
+                characterTime: characterTime.current,
             })
         });
         const data = await res.json() as {
@@ -67,8 +93,14 @@ export default function IndexPage() {
 
         if (data.success) {
             localStorage.setItem("token", data.token!);
+            resetKeystrokeDynamics();
+            setUsername("");
+            setPassword("");
             alert("Logged in successfully!");
         } else {
+            resetKeystrokeDynamics();
+            setUsername("");
+            setPassword("");
             alert(data.message);
         }
     }
@@ -78,49 +110,69 @@ export default function IndexPage() {
             <div className="flex-col justify-center items-center">
                 <div>
                     <Input type="text" label="Username" placeholder="Enter your username" labelPlacement="outside"
-                           isClearable={true} description="Your username typing pattern will be used to identify you."
+                           description="Your username typing pattern will be used to identify you."
                            value={username}
                            onChange={(e) => {
                                setUsername(e.target.value);
                            }}
-                           onClear={() => {
-                               setUsername("");
-                               resetKeystrokeDynamics();
-                           }}
                            onKeyDown={async (e) => {
                                if (e.keyCode === 13) {
                                    await login();
+                                   setUsername("");
+                                   setPassword("");
+                                   resetKeystrokeDynamics();
                                }
                                // if backspace then reset and delete the whole array
-                               actualCharacterBeginTime.current = new Date();
+                               const actualTime = performance.now();
+                               const key = e.key;
+                               if (!keys.current.has(key)) {
+                                   keys.current.set(key, actualTime);
+                               }
                            }
                            }
                            onKeyUp={async (e) => {
-                               // get character Up
                                if (e.keyCode === 8) {
                                    resetKeystrokeDynamics();
                                    setUsername("");
+                                   setPassword("");
                                    return;
                                }
-                               const characterUp = e.key;
-                               const actualTime = new Date();
+                               const actualTime = performance.now();
+                               const key = e.key;
 
-                               characterTime.current.push({
-                                   character: characterUp,
-                                   beginTime: actualCharacterBeginTime.current.getTime(),
-                                   endTime: actualTime.getTime(),
-                               });
+                               if (keys.current.has(key)) {
+                                   const startTime = keys.current.get(key)!;
+                                   characterTime.current.push({
+                                       character: key,
+                                       beginTime: startTime,
+                                       endTime: actualTime
+                                   });
+                                   keys.current.delete(key);
+                               }
                            }}
                     />
                 </div>
                 <div className="mt-4 mb-4"/>
                 <div>
-                    <Input type="password" label="Password" placeholder="Enter your password"
-                           labelPlacement="outside" isClearable={true} value={password}
-                           onChange={(e) => setPassword(e.target.value)} onClear={() => setPassword("")}
+                    <Input label="Password" placeholder="Enter your password"
+                           labelPlacement="outside" isClearable={false} value={password}
+                           endContent={
+                               <button className="focus:outline-none" type="button" onClick={toggleVisibility}>
+                                   {isVisible ? (
+                                       <EyeSlashFilledIcon className="text-2xl text-default-400 pointer-events-none"/>
+                                   ) : (
+                                       <EyeFilledIcon className="text-2xl text-default-400 pointer-events-none"/>
+                                   )}
+                               </button>
+                           }
+                           type={isVisible ? "text" : "password"}
+                           onChange={(e) => setPassword(e.target.value)}
                            onKeyDown={async (e) => {
                                if (e.keyCode === 13) {
                                    await login();
+                                   resetKeystrokeDynamics();
+                                   setUsername("");
+                                   setPassword("");
                                }
                            }}/>
                 </div>
