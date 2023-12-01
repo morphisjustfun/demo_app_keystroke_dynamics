@@ -25,7 +25,7 @@ export default function IndexPage() {
     const [errorUnauthorizedVisible, setErrorUnauthorizedVisible] = useState(false);
     const [successVisible, setSuccessVisible] = useState(false);
     const [errorInputVisible, setErrorInputVisible] = useState(false);
-
+    const [showUnexpectedError, setShowUnexpectedError] = useState(false);
 
     const resetKeystrokeDynamics = () => {
         characterTime.current = [];
@@ -33,83 +33,91 @@ export default function IndexPage() {
 
 
     const login = async () => {
-        setLoadingVisible(true);
-        if (username.length === 0) {
-            setUsername("");
-            setPassword("");
-            setErrorInputVisible(true);
-            return;
-        }
+        try {
+            setLoadingVisible(true);
+            if (username.length === 0) {
+                setUsername("");
+                setPassword("");
+                setErrorInputVisible(true);
+                return;
+            }
 
-        // if username contains spaces then alert
-        if (username.includes(" ")) {
-            setUsername("");
-            setPassword("");
-            setErrorInputVisible(true);
-            return;
-        }
+            // if username contains spaces then alert
+            if (username.includes(" ")) {
+                setUsername("");
+                setPassword("");
+                setErrorInputVisible(true);
+                return;
+            }
 
-        if (password.length === 0) {
-            setUsername("");
-            setPassword("");
-            setErrorInputVisible(true);
-            return;
-        }
+            if (password.length === 0) {
+                setUsername("");
+                setPassword("");
+                setErrorInputVisible(true);
+                return;
+            }
 
 
-        const twoFactorPayload = {
-            username,
-            'characterTime': characterTime.current,
-            'client_id': CLIENT_ID,
-        }
+            const twoFactorPayload = {
+                username,
+                'characterTime': characterTime.current,
+                'client_id': CLIENT_ID,
+            }
 
-        // TODO mock
-        console.log('-------------PAYLOAD TO SEND TO 2FA BACKEND----------')
-        console.log(twoFactorPayload);
-        console.log('-----------------------------------------------------')
-        console.log('-------------HASH RECEIVED FROM 2FA BACKEND----------')
-        const response = await fetch(`${TWO_FACTOR_AUTHENTICATION_DOMAIN}/auth`,
-            {
+            // TODO mock
+            console.log('-------------PAYLOAD TO SEND TO 2FA BACKEND----------')
+            console.log(twoFactorPayload);
+            console.log('-----------------------------------------------------')
+            console.log('-------------HASH RECEIVED FROM 2FA BACKEND----------')
+            const response = await fetch(`${TWO_FACTOR_AUTHENTICATION_DOMAIN}/auth`,
+                {
+                    method: "POST",
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(twoFactorPayload)
+                });
+            const responseJson = await response.json();
+            const hash = responseJson.payload;
+            console.log(hash);
+            console.log('-----------------------------------------------------')
+
+            const res = await fetch("/api/login", {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(twoFactorPayload)
+                body: JSON.stringify({
+                    username,
+                    password,
+                    hash,
+                    characterTime: characterTime.current,
+                })
             });
-        const responseJson = await response.json();
-        const hash = responseJson.payload;
-        console.log(hash);
-        console.log('-----------------------------------------------------')
 
-        const res = await fetch("/api/login", {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                username,
-                password,
-                hash,
-                characterTime: characterTime.current,
-            })
-        });
+            // setLoadingVisible(false);
+            const data = await res.json() as {
+                token: string | undefined,
+                message: string,
+                success: boolean
+            };
 
-        // setLoadingVisible(false);
-        const data = await res.json() as {
-            token: string | undefined,
-            message: string,
-            success: boolean
-        };
-
-        setLoadingVisible(false);
-        if (data.success) {
-            setSuccessVisible(true);
-            localStorage.setItem("token", data.token!);
-            resetKeystrokeDynamics();
-            setUsername("");
-            setPassword("");
-        } else {
-            setErrorUnauthorizedVisible(true);
+            setLoadingVisible(false);
+            if (data.success) {
+                setSuccessVisible(true);
+                localStorage.setItem("token", data.token!);
+                resetKeystrokeDynamics();
+                setUsername("");
+                setPassword("");
+            } else {
+                setErrorUnauthorizedVisible(true);
+                resetKeystrokeDynamics();
+                setUsername("");
+                setPassword("");
+            }
+        } catch (e) {
+            setLoadingVisible(false);
+            setShowUnexpectedError(true);
             resetKeystrokeDynamics();
             setUsername("");
             setPassword("");
@@ -128,6 +136,9 @@ export default function IndexPage() {
             <TextModal visible={errorInputVisible} setVisible={(v) => {
                 setErrorInputVisible(v);
             }} title={'Error'} message={'Please enter a valid username and password'} size='sm'/>
+            <TextModal visible={showUnexpectedError} setVisible={(v) => {
+                setShowUnexpectedError(v);
+            }} title={'Error'} message={'An unexpected error occurred'} size='sm'/>
 
             <div className="flex flex-col items-center justify-center gap-4 py-8 md:py-10 h-full w-full">
                 <div className="flex-col justify-center items-center">
